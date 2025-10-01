@@ -107,13 +107,13 @@ library(janitor)
 
 zori_tidy <- read_csv("data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv") %>%
   pivot_longer(
-    cols = matches("^\\d{4}-\\d{2}-\\d{2}$"),   # 匹配 YYYY-MM-DD 格式列
+    cols = matches("^\\d{4}-\\d{2}-\\d{2}$"),   
     names_to = "date",
     values_to = "zori"
   ) %>%
   mutate(
-    date = as.Date(date),                       # 直接转日期
-    zip  = as.character(RegionName)             # RegionName 就是 ZIP
+    date = as.Date(date),                       
+    zip  = as.character(RegionName)             
   ) %>%
   select(zip, CountyName, date, zori) %>%
   rename(county_name = CountyName)
