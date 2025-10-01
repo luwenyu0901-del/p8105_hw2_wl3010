@@ -1,0 +1,172 @@
+---
+title: "p8105_hw2_wl3010"
+author: "WL3010"
+date: "2025-10-01"
+output: github_document
+---
+```{r problem1, message=FALSE, warning=FALSE}
+# ---- Problem 1 ----
+
+library(tidyverse)
+
+pols = read_csv("data/pols-month.csv") %>%
+  separate(mon, into = c("year", "month", "day"), convert = TRUE) %>%
+  mutate(
+    month = month.name[month],
+    president = case_when(
+      prez_gop == 1 ~ "gop",
+      prez_dem == 1 ~ "dem"
+    ),
+    president = factor(president, levels = c("dem", "gop"))
+  ) %>%
+  select(-prez_gop, -prez_dem, -day)
+
+snp = read_csv("data/snp.csv") %>%
+  separate(date, into = c("month", "day", "year"), convert = TRUE) %>%
+  mutate(month = month.name[month]) %>%
+  select(year, month, close) %>%
+  arrange(year, month)
+
+unemp = read_csv("data/unemployment.csv") %>%
+  pivot_longer(
+    Jan:Dec,
+    names_to = "month",
+    values_to = "unemployment"
+  ) %>%
+  mutate(month = month.name[match(month, month.abb)]) %>%
+  rename(year = Year)
+
+merged_df = pols %>%
+  left_join(snp, by = c("year", "month")) %>%
+  left_join(unemp, by = c("year", "month"))
+
+glimpse(merged_df)
+
+# ---- Problem 2 ----
+
+```{r problem2, message=FALSE, warning=FALSE}
+library(readxl)
+library(janitor)
+library(dplyr)
+
+trash_file <- "data/202509 Trash Wheel Collection Data.xlsx"
+
+# ---- Mr. Trash Wheel ----
+mr_trash <- read_excel(trash_file, sheet = "Mr. Trash Wheel", range = "A2:M586") %>%
+  clean_names() %>%
+  filter(!is.na(dumpster)) %>%
+  mutate(
+    year = as.integer(year),
+    sports_balls = if ("sports_balls" %in% names(.)) as.integer(round(sports_balls)) else NA_integer_,
+    name = "Mr. Trash Wheel"
+  )
+
+prof_trash <- read_excel(trash_file, sheet = "Professor Trash Wheel", range = "A2:M108") %>%
+  clean_names() %>%
+  filter(!is.na(dumpster)) %>%
+  mutate(
+    year = as.integer(year),
+    sports_balls = if ("sports_balls" %in% names(.)) as.integer(round(sports_balls)) else NA_integer_,
+    name = "Professor Trash Wheel"
+  )
+
+gwynnda <- read_excel(trash_file, sheet = "Gwynns Falls Trash Wheel", range = "A2:M145") %>%
+  clean_names() %>%
+  filter(!is.na(dumpster)) %>%
+  mutate(
+    year = as.integer(year),
+    sports_balls = if ("sports_balls" %in% names(.)) as.integer(round(sports_balls)) else NA_integer_,
+    name = "Gwynnda"
+  )
+
+trash_wheel <- bind_rows(mr_trash, prof_trash, gwynnda)
+
+n_obs <- nrow(trash_wheel)
+
+prof_total_weight <- prof_trash %>%
+  summarize(total_weight = sum(weight_tons, na.rm = TRUE)) %>%
+  pull(total_weight)
+
+gwynnda_cigs_june2022 <- gwynnda %>%
+  filter(month == "June", year == 2022) %>%
+  summarize(total_cigs = sum(cigarette_butts, na.rm = TRUE)) %>%
+  pull(total_cigs)
+
+list(
+  n_obs = n_obs,
+  prof_total_weight = prof_total_weight,
+  gwynnda_cigs_june2022 = gwynnda_cigs_june2022
+)
+
+
+
+# ---- Problem 3 ----
+library(tidyverse)
+library(lubridate)
+library(janitor)
+
+zori_tidy <- read_csv("data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv") %>%
+  pivot_longer(
+    cols = matches("^\\d{4}-\\d{2}-\\d{2}$"),   # 匹配 YYYY-MM-DD 格式列
+    names_to = "date",
+    values_to = "zori"
+  ) %>%
+  mutate(
+    date = as.Date(date),                       # 直接转日期
+    zip  = as.character(RegionName)             # RegionName 就是 ZIP
+  ) %>%
+  select(zip, CountyName, date, zori) %>%
+  rename(county_name = CountyName)
+
+zips_tidy <- read_csv("data/Zip Codes.csv") %>%
+  clean_names() %>%
+  rename(
+    zip = zip_code,
+    county = county,
+    neighborhood = neighborhood
+  ) %>%
+  mutate(
+    zip = as.character(zip),
+    borough = case_when(
+      county == "New York"   ~ "Manhattan",
+      county == "Kings"      ~ "Brooklyn",
+      county == "Queens"     ~ "Queens",
+      county == "Bronx"      ~ "Bronx",
+      county == "Richmond"   ~ "Staten Island",
+      TRUE ~ county
+    )
+  )
+
+final_data <- zori_tidy %>%
+  left_join(zips_tidy, by = "zip")
+
+n_obs <- nrow(final_data)
+n_zip <- n_distinct(final_data$zip)
+n_nbh <- n_distinct(final_data$neighborhood)
+
+missing_zips <- setdiff(zips_tidy$zip, zori_tidy$zip)
+
+jan2020 <- final_data %>%
+  filter(date == as.Date("2020-01-31")) %>%
+  select(zip, zori_2020 = zori, borough, neighborhood)
+
+jan2021 <- final_data %>%
+  filter(date == as.Date("2021-01-31")) %>%
+  select(zip, zori_2021 = zori)
+
+drop <- jan2020 %>%
+  inner_join(jan2021, by = "zip") %>%
+  mutate(delta = zori_2021 - zori_2020) %>%
+  arrange(delta)
+
+top10_drop <- head(drop, 10)
+
+list(
+  total_observations = n_obs,
+  n_unique_zip = n_zip,
+  n_unique_neighborhood = n_nbh,
+  missing_zips = missing_zips,
+  top10_drop = top10_drop
+)
+
+knitr::kable(top10_drop, caption = "Top 10 ZIPs with largest rent drop Jan2020→Jan2021")
